@@ -10,9 +10,10 @@ import shlex
 import shutil
 import subprocess
 import sys
+import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 try:
     import tomllib  # type: ignore[attr-defined]
@@ -23,6 +24,8 @@ except ModuleNotFoundError:  # pragma: no cover
 APP_NAME = "hspool"
 DEFAULT_ROFI_WIDTH = "80%"
 DEFAULT_ROFI_PROMPT = "hspool"
+DEFAULT_BROWSER_COMMAND = "firefox"
+DEFAULT_SEARCH_URL = "https://www.google.com/search?q={query}"
 VALID_ACTIONS = {"copy", "exec"}
 VALID_STORES = {"public", "private"}
 
@@ -63,6 +66,8 @@ class AppConfig:
     private_file: Path
     rofi_width: str = DEFAULT_ROFI_WIDTH
     rofi_prompt: str = DEFAULT_ROFI_PROMPT
+    browser_command: str = DEFAULT_BROWSER_COMMAND
+    search_url: str = DEFAULT_SEARCH_URL
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -92,6 +97,11 @@ def build_parser() -> argparse.ArgumentParser:
         description="Curated personal snippet launcher using rofi.",
     )
     parser.add_argument("-add", action="store_true", dest="add", help="add a new item")
+    parser.add_argument(
+        "--browser",
+        action="store_true",
+        help="open the selected item in a browser or search for its content",
+    )
     parser.add_argument(
         "--store",
         choices=sorted(VALID_STORES),
@@ -138,6 +148,7 @@ def load_config() -> AppConfig:
 
     data_section = ensure_mapping(values.get("data"), "data")
     rofi_section = ensure_mapping(values.get("rofi"), "rofi")
+    browser_section = ensure_mapping(values.get("browser"), "browser")
 
     public_path = resolve_path(
         data_section.get("public_file", str(default_public)),
@@ -158,10 +169,18 @@ def load_config() -> AppConfig:
 
     width = rofi_section.get("width", DEFAULT_ROFI_WIDTH)
     prompt = rofi_section.get("prompt", DEFAULT_ROFI_PROMPT)
+    browser_command = browser_section.get("browser_command", DEFAULT_BROWSER_COMMAND)
+    search_url = browser_section.get("search_url", DEFAULT_SEARCH_URL)
     if not isinstance(width, str) or not width.strip():
         raise HspoolError("config rofi.width must be a non-empty string")
     if not isinstance(prompt, str) or not prompt.strip():
         raise HspoolError("config rofi.prompt must be a non-empty string")
+    if not isinstance(browser_command, str) or not browser_command.strip():
+        raise HspoolError("config browser.browser_command must be a non-empty string")
+    if not isinstance(search_url, str) or not search_url.strip():
+        raise HspoolError("config browser.search_url must be a non-empty string")
+    if "{query}" not in search_url:
+        raise HspoolError("config browser.search_url must contain {query}")
 
     return AppConfig(
         config_path=config_path,
@@ -170,6 +189,8 @@ def load_config() -> AppConfig:
         private_file=private_path,
         rofi_width=width.strip(),
         rofi_prompt=prompt.strip(),
+        browser_command=browser_command.strip(),
+        search_url=search_url.strip(),
     )
 
 
