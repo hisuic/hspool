@@ -4,6 +4,8 @@
 
 It is for quickly searching a small personal pool of reusable items and then either copying or executing the selected entry.
 
+It also has a browser lookup mode that uses the selected item's `content` as either a direct URL or a Google search query.
+
 It is not:
 
 - a clipboard history tool
@@ -21,6 +23,7 @@ It is not:
 - per-item action: `copy` or `exec`
 - interactive add flow with Rofi
 - script-friendly non-interactive add mode
+- browser lookup mode with URL-or-search behavior
 
 ## Requirements
 
@@ -57,6 +60,12 @@ Open the launcher:
 hspool
 ```
 
+Open browser mode:
+
+```bash
+hspool --browser
+```
+
 Interactive add mode:
 
 ```bash
@@ -89,6 +98,25 @@ copy succeeds does it run the content through `bash -lc`, so normal shell
 parsing works as expected. If copying fails, execution is skipped. Execution
 failures are reported back as command errors, and a critical notification is
 sent if `notify-send` is available.
+
+## Browser mode
+
+Browser mode uses the same Rofi selection UI but ignores the selected item's configured `action`. It always uses the selected item's `content` only.
+
+Behavior:
+
+- if `content` starts with `http://` or `https://`, `hspool --browser` opens it directly in the configured browser
+- otherwise, `hspool --browser` URL-encodes the content and opens a search URL built from the configured template
+
+With the default configuration, non-URL content is opened as a Google search:
+
+- `https://github.com` -> open directly
+- `linux rofi script mode` -> open `https://www.google.com/search?q=linux+rofi+script+mode`
+
+This is intentionally separate from normal mode:
+
+- `hspool` = normal action mode
+- `hspool --browser` = browser lookup mode
 
 ## Data format
 
@@ -145,6 +173,10 @@ private_file = "~/.local/share/hspool/private.jsonl"
 [rofi]
 width = "80%"
 prompt = "hspool"
+
+[browser]
+browser_command = "firefox"
+search_url = "https://www.google.com/search?q={query}"
 ```
 
 `rofi.width` is applied as a theme override for `window { width: ...; }`, so it can
@@ -154,8 +186,33 @@ Notes:
 
 - `data.files` is optional. If omitted, `hspool` loads `public_file` and `private_file`.
 - Relative paths in config are resolved relative to the config file directory.
+- `browser.search_url` must include `{query}`.
 - On Python 3.11+, TOML is parsed with `tomllib`.
 - On older Python 3 versions, `hspool` falls back to a small built-in parser that supports the simple string and string-array config used here.
+
+To use Brave instead of Firefox:
+
+```toml
+[browser]
+browser_command = "brave"
+search_url = "https://www.google.com/search?q={query}"
+```
+
+If your browser command needs arguments, use a normal command string:
+
+```toml
+[browser]
+browser_command = "brave --new-window"
+```
+
+## Hyprland example
+
+Example split between normal mode and browser mode:
+
+```ini
+bind = SUPER, I, exec, hspool
+bind = SUPER SHIFT, I, exec, hspool --browser
+```
 
 ## Development notes
 
