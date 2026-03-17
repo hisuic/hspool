@@ -8,6 +8,8 @@ from hspoollib.app import (
     build_search_url,
     handle_browser_item,
     is_http_url,
+    open_in_browser,
+    prepare_browser_command,
 )
 
 
@@ -75,6 +77,26 @@ class BrowserHelpersTest(unittest.TestCase):
         self.assertEqual(
             copy_target,
             "https://www.google.com/search?q=linux+rofi+script+mode",
+        )
+
+    def test_prepare_browser_command_adds_new_window_for_firefox(self) -> None:
+        self.assertEqual(
+            prepare_browser_command(["firefox"]),
+            ["firefox", "--new-window"],
+        )
+
+    def test_prepare_browser_command_does_not_duplicate_new_window(self) -> None:
+        self.assertEqual(
+            prepare_browser_command(["firefox", "--new-window"]),
+            ["firefox", "--new-window"],
+        )
+
+    def test_open_in_browser_uses_new_window_for_firefox(self) -> None:
+        with patch("hspoollib.app.subprocess.Popen") as popen:
+            open_in_browser("https://github.com", "firefox")
+        self.assertEqual(
+            popen.call_args.args[0],
+            ["firefox", "--new-window", "https://github.com"],
         )
 
 

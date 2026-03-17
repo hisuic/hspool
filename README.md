@@ -198,6 +198,8 @@ browser_command = "brave"
 search_url = "https://www.google.com/search?q={query}"
 ```
 
+When `browser_command` is `firefox`, `hspool` automatically adds `--new-window` unless you already included it yourself.
+
 If your browser command needs arguments, use a normal command string:
 
 ```toml

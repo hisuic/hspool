@@ -522,6 +522,7 @@ def open_in_browser(target: str, browser_command: str) -> None:
         raise HspoolError(f"invalid browser command: {exc}") from exc
     if not base_cmd:
         raise HspoolError("browser command must not be empty")
+    base_cmd = prepare_browser_command(base_cmd)
     try:
         subprocess.Popen(
             [*base_cmd, target],
@@ -531,6 +532,14 @@ def open_in_browser(target: str, browser_command: str) -> None:
         raise HspoolError(f"required command not found: {base_cmd[0]}") from exc
     except OSError as exc:
         raise HspoolError(f"failed to launch browser: {exc}") from exc
+
+
+def prepare_browser_command(base_cmd: Sequence[str]) -> List[str]:
+    prepared = list(base_cmd)
+    binary_name = Path(prepared[0]).name
+    if binary_name == "firefox" and "--new-window" not in prepared[1:]:
+        prepared.append("--new-window")
+    return prepared
 
 
 def run_rofi_menu(config: AppConfig, lines: Sequence[str], prompt: str) -> Optional[str]:
