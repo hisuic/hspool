@@ -1,234 +1,181 @@
 # hspool
 
-`hspool` is a local curated launcher for reusable strings, mainly shell commands, email addresses, and other short snippets. It uses Rofi as the interactive frontend and stores entries as JSON Lines files.
+Personal Rofi-powered launcher for reusable commands and short text snippets.
 
-It is for quickly searching a small personal pool of reusable items and then either copying or executing the selected entry.
+---
 
-It also has a browser lookup mode that uses the selected item's `content` as either a direct URL or a Google search query.
+## Overview
 
-It is not:
+`hspool` is a lightweight CLI tool for storing and quickly retrieving reusable strings such as:
+
+- shell commands
+- email addresses
+- frequently used text snippets
+
+Entries are searched through **Rofi**, and can either be **copied to the clipboard** or **executed as commands**.
+
+This tool is intentionally simple and minimal.
+
+It is **not**:
 
 - a clipboard history tool
-- integrated with `cliphist`
-- a password vault or secret manager
-- a database-backed launcher
+- a password manager
+- a secret storage system
+
+It is designed as a **personal snippet pool** for fast reuse.
+
+---
 
 ## Features
 
-- Python implementation with standard library only
-- executable as a normal shebang script
-- XDG-friendly config and data paths
-- two data stores: `public.jsonl` and `private.jsonl`
-- merged search across both stores
-- per-item action: `copy` or `exec`
-- interactive add flow with Rofi
-- script-friendly non-interactive add mode
-- browser lookup mode with URL-or-search behavior
+- Store reusable commands and text snippets
+- Search entries using **Rofi**
+- Copy snippets to clipboard or execute commands
+- Separate **public** and **private** data stores
+- Minimal **JSON Lines** storage format
+- XDG-friendly file locations
+- No external Python dependencies
+
+---
 
 ## Requirements
 
-Target environment:
+The following tools must be available:
 
-- Linux
-- Wayland-oriented setup such as Hyprland
-- `rofi` or `rofi-wayland`
-- `wl-copy`
-- `notify-send`
-- `bash`
 - Python 3
+- rofi (or rofi-wayland)
+- wl-copy
+- notify-send
 
-No virtualenv or pip packages are required.
+Typical Linux environments (Arch, Ubuntu, etc.) already include most of these.
 
-## Installation
+---
 
-Clone the repository somewhere under your home directory, for example:
+## Setup
+
+Clone the repository:
 
 ```bash
-git clone <your-repo-url> ~/src/hspool
-cd ~/src/hspool
-chmod +x hspool
-ln -sf ~/src/hspool/hspool ~/.local/bin/hspool
+git clone https://github.com/yourname/hspool.git
+cd hspool
 ```
 
-The executable script imports the local `hspoollib` package from the same repository, so the symlink-to-script workflow is the intended local setup.
+Make the script executable:
+```bash
+chmod +x hspool
+```
+
+Create a symlink so the command is available globally:
+```bash
+ln -s $(pwd)/hspool ~/.local/bin/hspool
+```
+
+Ensure `~/.local/bin` is in your `PATH`.
+
+---
 
 ## Usage
 
-Open the launcher:
-
+### Launch the selector
 ```bash
 hspool
 ```
 
-Open browser mode:
+This opens a Rofi menu where entries can be searched and selected.
 
+Displayed format:
 ```bash
-hspool --browser
+cmd  hyprctl reload              [Hyprland config reload]
+txt  yourname@example.com        [Main personal email]
 ```
 
-Interactive add mode:
+Prefix meanings:
+- `cmd` → command execution
+- `txt` → copy to clipboard
+
+---
+
+## Add an entry (interactive)
 
 ```bash
 hspool -add
 ```
 
-Non-interactive add mode:
+You will be prompted for:
 
+- content
+- description
+- action (`copy` or `exec`)
+- storage location (`public` or `private`)
+
+---
+
+## Add an entry (non-interactive)
+
+Example:
 ```bash
-hspool -add --store public --action exec --description "Hyprland config reload" -- "hyprctl reload"
-hspool -add --store private --action copy --description "Main personal email" -- "me@example.com"
+hspool -add --store public --action exec \
+  --description "Hyprland config reload" \
+  -- "hyprctl reload"
 ```
 
-When launched, entries are displayed as one line in Rofi:
-
-```text
-cmd  hyprctl reload              [Hyprland config reload]
-txt  yourname@example.com        [Main personal email]
+Example for storing text:
+```bash
+hspool -add --store private --action copy \
+  --description "Main personal email" \
+  -- "me@example.com"
 ```
 
-Action mapping:
+---
 
-- `exec` -> `cmd`
-- `copy` -> `txt`
+## Data and Paths
+hspool follows XDG conventions.
 
-For `copy`, `hspool` sends the item content to `wl-copy`.
+Config file:
+```bash
+~/.config/hspool/config.toml
+```
 
-For `exec`, `hspool` first copies the item content to `wl-copy`. Only if that
-copy succeeds does it run the content through `bash -lc`, so normal shell
-parsing works as expected. If copying fails, execution is skipped. Execution
-failures are reported back as command errors, and a critical notification is
-sent if `notify-send` is available.
+Data files:
+```bash
+~/.local/share/hspool/public.jsonl
+~/.local/share/hspool/private.jsonl
+```
 
-## Browser mode
+Each entry is stored as one JSON object per line.
 
-Browser mode uses the same Rofi selection UI but ignores the selected item's configured `action`. It always uses the selected item's `content` only.
-
-Behavior:
-
-- if `content` starts with `http://` or `https://`, `hspool --browser` opens it directly in the configured browser
-- otherwise, `hspool --browser` URL-encodes the content and opens a search URL built from the configured template
-
-With the default configuration, non-URL content is opened as a Google search:
-
-- `https://github.com` -> open directly
-- `linux rofi script mode` -> open `https://www.google.com/search?q=linux+rofi+script+mode`
-
-This is intentionally separate from normal mode:
-
-- `hspool` = normal action mode
-- `hspool --browser` = browser lookup mode
-
-## Data format
-
-Each item is stored as one JSON object per line:
-
-```json
+Example:
+```bash
 {"content":"hyprctl reload","action":"exec","description":"Hyprland config reload"}
 ```
+Both files are loaded when searching.
 
-Required schema:
+---
 
-- `content`
-- `action`
-- `description`
+## Config
+Configuration is optional.
 
-Supported actions in v1:
+Default behavior works without a config file.
 
-- `copy`
-- `exec`
+Example `~/.config/hspool/config.toml`:
+```bash
+rofi_prompt = "hspool"
+rofi_width = "80%"
 
-No titles, tags, type fields, or clipboard-history import features are included.
-
-## File locations
-
-Config:
-
-- `~/.config/hspool/config.toml`
-
-Data:
-
-- `~/.local/share/hspool/public.jsonl`
-- `~/.local/share/hspool/private.jsonl`
-
-Directories are created automatically as needed. Missing data files are treated as empty.
-
-`private.jsonl` is for personal non-public entries such as email addresses. It is not encrypted and should not be used for passwords, tokens, API keys, or other secrets.
-
-## Configuration
-
-If `~/.config/hspool/config.toml` does not exist, `hspool` uses sensible defaults.
-
-Supported config values:
-
-```toml
-[data]
-public_file = "~/.local/share/hspool/public.jsonl"
-private_file = "~/.local/share/hspool/private.jsonl"
-# Optional override for merged search input order:
-# files = [
-#   "~/.local/share/hspool/public.jsonl",
-#   "~/.local/share/hspool/private.jsonl",
-# ]
-
-[rofi]
-width = "80%"
-prompt = "hspool"
-
-[browser]
-browser_command = "firefox"
-search_url = "https://www.google.com/search?q={query}"
+data_files = [
+  "~/.local/share/hspool/public.jsonl",
+  "~/.local/share/hspool/private.jsonl"
+]
 ```
 
-`rofi.width` is applied as a theme override for `window { width: ...; }`, so it can
-override theme files that set a fixed window width.
+Defaults:
 
-Notes:
+prompt: `hspool`
 
-- `data.files` is optional. If omitted, `hspool` loads `public_file` and `private_file`.
-- Relative paths in config are resolved relative to the config file directory.
-- `browser.search_url` must include `{query}`.
-- On Python 3.11+, TOML is parsed with `tomllib`.
-- On older Python 3 versions, `hspool` falls back to a small built-in parser that supports the simple string and string-array config used here.
+rofi width: `80%`
 
-To use Brave instead of Firefox:
+---
 
-```toml
-[browser]
-browser_command = "brave"
-search_url = "https://www.google.com/search?q={query}"
-```
-
-When `browser_command` is `firefox`, `hspool` automatically adds `--new-window` unless you already included it yourself.
-
-If your browser command needs arguments, use a normal command string:
-
-```toml
-[browser]
-browser_command = "brave --new-window"
-```
-
-## Hyprland example
-
-Example split between normal mode and browser mode:
-
-```ini
-bind = SUPER, I, exec, hspool
-bind = SUPER SHIFT, I, exec, hspool --browser
-```
-
-## Development notes
-
-This repository is intended to stay small and local-tool oriented. The initial implementation deliberately avoids:
-
-- pip dependencies
-- subcommand-heavy CLI redesign
-- tags or extra metadata
-- plugin systems
-- secret-management claims
-
-## Troubleshooting
-
-- If `hspool` says no entries were found, add one with `hspool -add`.
-- If Rofi does not open, confirm `rofi` or `rofi-wayland` is installed and on `PATH`.
-- If copy actions fail, confirm `wl-copy` is installed.
-- If exec actions fail, the error includes the failing command and any captured stdout/stderr.
+## Warning
+`private.jsonl` is not encrypted. Do not store secrets in this file.
+`hspool` is a convenience tool, not a secure secret manager.
