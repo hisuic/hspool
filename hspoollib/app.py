@@ -82,7 +82,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             else:
                 non_interactive_add(config, args)
             return 0
-        launch_selector(config)
+        if args.browser:
+            launch_browser_selector(config)
+        else:
+            launch_selector(config)
         return 0
     except KeyboardInterrupt:
         return 130
@@ -391,6 +394,18 @@ def append_item(config: AppConfig, store: str, item: Item) -> None:
 
 
 def launch_selector(config: AppConfig) -> None:
+    item = select_item(config, prompt=config.rofi_prompt)
+    if item is not None:
+        handle_item(item)
+
+
+def launch_browser_selector(config: AppConfig) -> None:
+    item = select_item(config, prompt=f"{config.rofi_prompt}: browser")
+    if item is not None:
+        handle_browser_item(item, config)
+
+
+def select_item(config: AppConfig, prompt: str) -> Optional[Item]:
     items = load_items(config.data_files)
     if not items:
         raise HspoolError(
@@ -398,16 +413,15 @@ def launch_selector(config: AppConfig) -> None:
         )
 
     lines = [item.display_line() for item in items]
-    selected = run_rofi_menu(config, lines, prompt=config.rofi_prompt)
+    selected = run_rofi_menu(config, lines, prompt=prompt)
     if selected is None:
-        return
+        return None
 
     try:
         index = lines.index(selected)
     except ValueError as exc:
         raise HspoolError("rofi returned an unknown selection") from exc
-
-    handle_item(items[index])
+    return items[index]
 
 
 def load_items(paths: Iterable[Path]) -> List[Item]:
@@ -477,6 +491,41 @@ def handle_item(item: Item) -> None:
         notify("hspool", f"Executed and copied: {item.description}")
         return
     raise HspoolError(f"unsupported action: {item.action}")
+
+
+def handle_browser_item(item: Item, config: AppConfig) -> None:
+    target = item.content if is_http_url(item.content) else build_search_url(
+        item.content, config.search_url
+    )
+    open_in_browser(target, config.browser_command)
+    notify("hspool", f"Opened in browser: {item.description}")
+
+
+def is_http_url(content: str) -> bool:
+    return content.startswith("http://") or content.startswith("https://")
+
+
+def build_search_url(content: str, template: str) -> str:
+    query = urllib.parse.quote_plus(content)
+    return template.format(query=query)
+
+
+def open_in_browser(target: str, browser_command: str) -> None:
+    try:
+        base_cmd = shlex.split(browser_command)
+    except ValueError as exc:
+        raise HspoolError(f"invalid browser command: {exc}") from exc
+    if not base_cmd:
+        raise HspoolError("browser command must not be empty")
+    try:
+        subprocess.Popen(
+            [*base_cmd, target],
+            start_new_session=True,
+        )
+    except FileNotFoundError as exc:
+        raise HspoolError(f"required command not found: {base_cmd[0]}") from exc
+    except OSError as exc:
+        raise HspoolError(f"failed to launch browser: {exc}") from exc
 
 
 def run_rofi_menu(config: AppConfig, lines: Sequence[str], prompt: str) -> Optional[str]:
