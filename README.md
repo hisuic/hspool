@@ -12,7 +12,7 @@ Personal Rofi-powered launcher for reusable commands and short text snippets.
 - email addresses
 - frequently used text snippets
 
-Entries are searched through **Rofi**, and can either be **copied to the clipboard** or **executed as commands**.
+Entries are searched through **Rofi**, and can either be **copied to the clipboard**, **executed as commands**, or **opened in a browser**.
 
 This tool is intentionally simple and minimal.
 
@@ -31,6 +31,7 @@ It is designed as a **personal snippet pool** for fast reuse.
 - Store reusable commands and text snippets
 - Search entries using **Rofi**
 - Copy snippets to clipboard or execute commands
+- Open selected entries in a browser or search for them on the web
 - Separate **public** and **private** data stores
 - Minimal **JSON Lines** storage format
 - XDG-friendly file locations
@@ -43,12 +44,13 @@ It is designed as a **personal snippet pool** for fast reuse.
 The following tools must be available:
 
 - Python 3
-- rofi (or rofi-wayland)
+- rofi or rofi-wayland
 - wl-copy
+- nerdfonts
+
+Optional but recommended:
+
 - notify-send
-
-Typical Linux environments (Arch, Ubuntu, etc.) already include most of these.
-
 ---
 
 ## Setup
@@ -85,13 +87,22 @@ This opens a Rofi menu where entries can be searched and selected.
 
 Displayed format:
 ```bash
-cmd  hyprctl reload              [Hyprland config reload]
-txt  yourname@example.com        [Main personal email]
+[CMD]   hyprctl reload              [Hyprland config reload]
+[TXT]   yourname@example.com        [Main personal email]
 ```
 
-Prefix meanings:
-- `cmd` → command execution
-- `txt` → copy to clipboard
+---
+
+## Open in Browser
+
+```bash
+hspool --browser
+```
+
+This opens the same selector, but the selected entry is handled as a browser target:
+
+- `http://...` or `https://...` entries are opened directly
+- other text is searched using the configured search URL
 
 ---
 
@@ -155,27 +166,28 @@ Both files are loaded when searching.
 ## Config
 Configuration is optional.
 
-Default behavior works without a config file.
+Default behavior works without a config file.  
+This example below shows the default configuration.
 
 Example `~/.config/hspool/config.toml`:
 ```bash
-rofi_prompt = "hspool"
-rofi_width = "80%"
+[rofi]
+prompt = "hspool"
+width = "80%"
 
-data_files = [
+[data]
+files = [
   "~/.local/share/hspool/public.jsonl",
   "~/.local/share/hspool/private.jsonl"
 ]
+
+[browser]
+browser_command = "firefox"
+search_url = "https://www.google.com/search?q={query}"
 ```
-
-Defaults:
-
-prompt: `hspool`
-
-rofi width: `80%`
 
 ---
 
 ## Warning
-`private.jsonl` is not encrypted. Do not store secrets in this file.
+`private.jsonl` is not encrypted. Do not store secrets in this file.  
 `hspool` is a convenience tool, not a secure secret manager.
