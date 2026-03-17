@@ -515,8 +515,8 @@ def build_rofi_base_command(config: AppConfig, prompt: str) -> List[str]:
         "fuzzy",
         "-p",
         prompt,
-        "-width",
-        config.rofi_width,
+        "-theme-str",
+        f"window {{ width: {config.rofi_width}; }}",
     ]
 
 

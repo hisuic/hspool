@@ -143,6 +143,9 @@ width = "80%"
 prompt = "hspool"
 ```
 
+`rofi.width` is applied as a theme override for `window { width: ...; }`, so it can
+override theme files that set a fixed window width.
+
 Notes:
 
 - `data.files` is optional. If omitted, `hspool` loads `public_file` and `private_file`.
