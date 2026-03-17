@@ -10,9 +10,10 @@ import shlex
 import shutil
 import subprocess
 import sys
+import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 try:
     import tomllib  # type: ignore[attr-defined]
@@ -23,6 +24,8 @@ except ModuleNotFoundError:  # pragma: no cover
 APP_NAME = "hspool"
 DEFAULT_ROFI_WIDTH = "80%"
 DEFAULT_ROFI_PROMPT = "hspool"
+DEFAULT_BROWSER_COMMAND = "firefox"
+DEFAULT_SEARCH_URL = "https://www.google.com/search?q={query}"
 VALID_ACTIONS = {"copy", "exec"}
 VALID_STORES = {"public", "private"}
 
@@ -63,6 +66,8 @@ class AppConfig:
     private_file: Path
     rofi_width: str = DEFAULT_ROFI_WIDTH
     rofi_prompt: str = DEFAULT_ROFI_PROMPT
+    browser_command: str = DEFAULT_BROWSER_COMMAND
+    search_url: str = DEFAULT_SEARCH_URL
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -77,7 +82,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             else:
                 non_interactive_add(config, args)
             return 0
-        launch_selector(config)
+        if args.browser:
+            launch_browser_selector(config)
+        else:
+            launch_selector(config)
         return 0
     except KeyboardInterrupt:
         return 130
@@ -92,6 +100,11 @@ def build_parser() -> argparse.ArgumentParser:
         description="Curated personal snippet launcher using rofi.",
     )
     parser.add_argument("-add", action="store_true", dest="add", help="add a new item")
+    parser.add_argument(
+        "--browser",
+        action="store_true",
+        help="open the selected item in a browser or search for its content",
+    )
     parser.add_argument(
         "--store",
         choices=sorted(VALID_STORES),
@@ -138,6 +151,7 @@ def load_config() -> AppConfig:
 
     data_section = ensure_mapping(values.get("data"), "data")
     rofi_section = ensure_mapping(values.get("rofi"), "rofi")
+    browser_section = ensure_mapping(values.get("browser"), "browser")
 
     public_path = resolve_path(
         data_section.get("public_file", str(default_public)),
@@ -158,10 +172,18 @@ def load_config() -> AppConfig:
 
     width = rofi_section.get("width", DEFAULT_ROFI_WIDTH)
     prompt = rofi_section.get("prompt", DEFAULT_ROFI_PROMPT)
+    browser_command = browser_section.get("browser_command", DEFAULT_BROWSER_COMMAND)
+    search_url = browser_section.get("search_url", DEFAULT_SEARCH_URL)
     if not isinstance(width, str) or not width.strip():
         raise HspoolError("config rofi.width must be a non-empty string")
     if not isinstance(prompt, str) or not prompt.strip():
         raise HspoolError("config rofi.prompt must be a non-empty string")
+    if not isinstance(browser_command, str) or not browser_command.strip():
+        raise HspoolError("config browser.browser_command must be a non-empty string")
+    if not isinstance(search_url, str) or not search_url.strip():
+        raise HspoolError("config browser.search_url must be a non-empty string")
+    if "{query}" not in search_url:
+        raise HspoolError("config browser.search_url must contain {query}")
 
     return AppConfig(
         config_path=config_path,
@@ -170,6 +192,8 @@ def load_config() -> AppConfig:
         private_file=private_path,
         rofi_width=width.strip(),
         rofi_prompt=prompt.strip(),
+        browser_command=browser_command.strip(),
+        search_url=search_url.strip(),
     )
 
 
@@ -370,6 +394,18 @@ def append_item(config: AppConfig, store: str, item: Item) -> None:
 
 
 def launch_selector(config: AppConfig) -> None:
+    item = select_item(config, prompt=config.rofi_prompt)
+    if item is not None:
+        handle_item(item)
+
+
+def launch_browser_selector(config: AppConfig) -> None:
+    item = select_item(config, prompt=f"{config.rofi_prompt}: browser")
+    if item is not None:
+        handle_browser_item(item, config)
+
+
+def select_item(config: AppConfig, prompt: str) -> Optional[Item]:
     items = load_items(config.data_files)
     if not items:
         raise HspoolError(
@@ -377,16 +413,15 @@ def launch_selector(config: AppConfig) -> None:
         )
 
     lines = [item.display_line() for item in items]
-    selected = run_rofi_menu(config, lines, prompt=config.rofi_prompt)
+    selected = run_rofi_menu(config, lines, prompt=prompt)
     if selected is None:
-        return
+        return None
 
     try:
         index = lines.index(selected)
     except ValueError as exc:
         raise HspoolError("rofi returned an unknown selection") from exc
-
-    handle_item(items[index])
+    return items[index]
 
 
 def load_items(paths: Iterable[Path]) -> List[Item]:
@@ -456,6 +491,55 @@ def handle_item(item: Item) -> None:
         notify("hspool", f"Executed and copied: {item.description}")
         return
     raise HspoolError(f"unsupported action: {item.action}")
+
+
+def handle_browser_item(item: Item, config: AppConfig) -> None:
+    target = build_browser_target(item.content, config.search_url)
+    open_in_browser(target, config.browser_command)
+    notify("hspool", f"Opened in browser: {item.description}")
+
+
+def is_http_url(content: str) -> bool:
+    return content.startswith("http://") or content.startswith("https://")
+
+
+def build_search_url(content: str, template: str) -> str:
+    query = urllib.parse.quote_plus(content)
+    try:
+        return template.format(query=query)
+    except (IndexError, KeyError, ValueError) as exc:
+        raise HspoolError(f"invalid browser search_url template: {exc}") from exc
+
+
+def build_browser_target(content: str, search_template: str) -> str:
+    return content if is_http_url(content) else build_search_url(content, search_template)
+
+
+def open_in_browser(target: str, browser_command: str) -> None:
+    try:
+        base_cmd = shlex.split(browser_command)
+    except ValueError as exc:
+        raise HspoolError(f"invalid browser command: {exc}") from exc
+    if not base_cmd:
+        raise HspoolError("browser command must not be empty")
+    base_cmd = prepare_browser_command(base_cmd)
+    try:
+        subprocess.Popen(
+            [*base_cmd, target],
+            start_new_session=True,
+        )
+    except FileNotFoundError as exc:
+        raise HspoolError(f"required command not found: {base_cmd[0]}") from exc
+    except OSError as exc:
+        raise HspoolError(f"failed to launch browser: {exc}") from exc
+
+
+def prepare_browser_command(base_cmd: Sequence[str]) -> List[str]:
+    prepared = list(base_cmd)
+    binary_name = Path(prepared[0]).name
+    if binary_name == "firefox" and "--new-window" not in prepared[1:]:
+        prepared.append("--new-window")
+    return prepared
 
 
 def run_rofi_menu(config: AppConfig, lines: Sequence[str], prompt: str) -> Optional[str]:
