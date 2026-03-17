@@ -45,14 +45,14 @@ class Item:
             "description": self.description,
         }
 
-    def display_line(self, content_width: int = 28) -> str:
-        prefix = "cmd" if self.action == "exec" else "txt"
+    def display_line(self, content_width: int = 65) -> str:
+        prefix = " " if self.action == "exec" else " "
         compact = " ".join(self.content.split())
         if len(compact) > content_width:
             shown = compact[: max(0, content_width - 1)] + "…"
         else:
             shown = compact.ljust(content_width)
-        return f"{prefix}  {shown}  [{self.description}]"
+        return f"{prefix:<4} {shown}   [{self.description}]"
 
 
 @dataclass
