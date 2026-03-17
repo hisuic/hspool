@@ -436,6 +436,15 @@ def handle_item(item: Item) -> None:
         return
     if item.action == "exec":
         try:
+            run_required_command(["wl-copy"], input_text=item.content)
+        except HspoolError as exc:
+            notify(
+                "hspool",
+                f"Copy failed, command not executed: {item.description}",
+                urgency="critical",
+            )
+            raise exc
+        try:
             run_required_command(
                 ["bash", "-lc", item.content],
                 capture_output=True,
@@ -444,7 +453,7 @@ def handle_item(item: Item) -> None:
         except HspoolError as exc:
             notify("hspool", f"Command failed: {item.description}", urgency="critical")
             raise exc
-        notify("hspool", f"Executed: {item.description}")
+        notify("hspool", f"Executed and copied: {item.description}")
         return
     raise HspoolError(f"unsupported action: {item.action}")
 

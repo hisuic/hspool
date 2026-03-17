@@ -84,7 +84,11 @@ Action mapping:
 
 For `copy`, `hspool` sends the item content to `wl-copy`.
 
-For `exec`, `hspool` runs the content through `bash -lc` so normal shell parsing works as expected. Execution failures are reported back as command errors, and a critical notification is sent if `notify-send` is available.
+For `exec`, `hspool` first copies the item content to `wl-copy`. Only if that
+copy succeeds does it run the content through `bash -lc`, so normal shell
+parsing works as expected. If copying fails, execution is skipped. Execution
+failures are reported back as command errors, and a critical notification is
+sent if `notify-send` is available.
 
 ## Data format
 
