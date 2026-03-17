@@ -494,9 +494,7 @@ def handle_item(item: Item) -> None:
 
 
 def handle_browser_item(item: Item, config: AppConfig) -> None:
-    target = item.content if is_http_url(item.content) else build_search_url(
-        item.content, config.search_url
-    )
+    target = build_browser_target(item.content, config.search_url)
     open_in_browser(target, config.browser_command)
     notify("hspool", f"Opened in browser: {item.description}")
 
@@ -507,7 +505,14 @@ def is_http_url(content: str) -> bool:
 
 def build_search_url(content: str, template: str) -> str:
     query = urllib.parse.quote_plus(content)
-    return template.format(query=query)
+    try:
+        return template.format(query=query)
+    except (IndexError, KeyError, ValueError) as exc:
+        raise HspoolError(f"invalid browser search_url template: {exc}") from exc
+
+
+def build_browser_target(content: str, search_template: str) -> str:
+    return content if is_http_url(content) else build_search_url(content, search_template)
 
 
 def open_in_browser(target: str, browser_command: str) -> None:
